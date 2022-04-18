@@ -20,26 +20,43 @@
 #include "config.h"
 #include <math.h>
 
+// Declare object tft(display) and ts(touch screen)
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 XPT2046_Touchscreen ts(TS_CS);
 
+// parameters for screen calibration
 float xCalC = 0.0, yCalC = 0.0;
 float xCalM = 0.0, yCalM = 0.0;
+
+// Piano has White note and black note 
+// And below is the dimensions of them (pixel)
 const int8_t BlackNoteHeight = 120 ;
 const int8_t BlackNoteWidth = 30 ;
 const uint16_t WhiteNoteHeight = 240 ;
 const int8_t WhiteNoteWidth = 40 ;
+
+// Declare "BaseFreq" for calculate output frequency
 float BaseFreq = 261.6 ; //C4
 
+// Class "ScreenPoint"
+// Ex. (x,y) = (201,160)
+// Max(x,y) = (320,160)
 class ScreenPoint {
     public:
         int16_t x;
         int16_t y;
+
+        //Constructor take (x,y) as parameters
         ScreenPoint(int16_t xIn, int16_t yIn){
             x = xIn;
             y = yIn;
         }
 };
+
+// Function "getScreenCoords": 
+// return type: ScreenPoint after calibration
+// 0 <= x <= 320 ; 0 <= y <= 160
+// parameters: TS_Point(A type define in "XPT2046_Touchscreen.h")
 ScreenPoint getScreenCoords(TS_Point p) {
     int16_t xCoord = round((p.x * xCalM) + xCalC);
     int16_t yCoord = round((p.y * yCalM) + yCalC);
@@ -55,12 +72,15 @@ ScreenPoint getScreenCoords(TS_Point p) {
 
     return(ScreenPoint(xCoord, yCoord));
 }
+
+// Function "calibrateTouchScreen"
+// return type: void
+// A procedure called in "setup" before using touchscreen
 void calibrateTouchScreen(){
     TS_Point p;
     int16_t x1,y1,x2,y2;
 
     tft.fillScreen(ILI9341_BLACK);
-
 
     while(ts.touched());
 
@@ -97,18 +117,32 @@ void calibrateTouchScreen(){
     yCalC = 20.0 - ((float)y1 * yCalM);
 }
 
+// Function to draw the appearance of the piano
 void drawPiano(){
+    // Initialize the display with white background
     tft.fillScreen(ILI9341_WHITE);
-    int count = 0 ;
-    bool t = 0 ;
-    String note[9] = {"C4","D4","E4","F4","G4","A4","B4","C5","\0"};
+
+    //variable for drawing black notes
+    int count = 0 ; //how many black note did it draw ? equal 0 every time 2 or 3 count 
+    bool t = 0 ;    //jump between "draw 2" and "draw 3" //toggle
+
+    //String array storge note's name
+    String note[9] = {"C4","D4","E4","F4","G4","A4","B4","C5","C6"};
+
+    //Basic setup for printing texts
     tft.setTextSize(2);
     tft.setTextColor(ILI9341_BLACK);
+
+    //Print Vertical black lines, by setting i = 0, and add up 40px every iterations.
     for(int i = 0 ; i <= tft.width() ; i += tft.width() / 8){
         tft.drawFastVLine(i,0,tft.height(),ILI9341_BLACK);
         tft.setCursor(i + 10,210);
+        //print note's text
         tft.print(note[i/40]);
     }
+    //After printing vertical black lines, the white notes formed.
+
+    //print black notes
     for(int i = 0 ; i <= tft.width() ; i += tft.width() / 8){
         if(count == 2 && !t){
             count = 0 ;
@@ -124,11 +158,18 @@ void drawPiano(){
     }
 }
 
+// Function "playNote"
+// return type: void
+// parameters: ScreenPoint
+// Description: the function is used to deicde the area i touched abd played the corresponding frequency
 void playNote(ScreenPoint p){
+    //Avoiding playing two notes at the same time when touching where black and white notes overlapped.
+    //So if the black notes are touched, "isBlackPlayed" would set to true, otherwise it remain false.
     bool isBlackPlayed = 0 ; 
-    // Black
+
+    // Black Notes
     bool t = 0 ;
-    int count = 0 ; //For avoid white space
+    int count = 0 ; //For avoiding white notes
     for(int i = 0 ; i <= tft.width() ; i += tft.width() / 8){
         if(count == 2 && !t){
                 count = 0 ;
@@ -145,7 +186,8 @@ void playNote(ScreenPoint p){
         }
         count++ ;
     }
-    //White
+    //White Notes
+    //Enter the loop if the black notes aren't touched
     if(!isBlackPlayed){
         for(int i = 0 ; i <= tft.width() ; i += tft.width() / 8){
             if(p.x > i && p.x < i + WhiteNoteWidth && p.y > 0 && p.y < WhiteNoteHeight){
@@ -155,6 +197,8 @@ void playNote(ScreenPoint p){
     }
 }
 
+//Calculte piano frequencies
+//Wikipedia: https://zh.wikipedia.org/wiki/%E9%8B%BC%E7%90%B4%E9%8D%B5%E9%A0%BB%E7%8E%87
 float getPianoFreq(char n,int p){
     if(n == 'B'){
         switch(p){
@@ -185,26 +229,39 @@ void setup()
 {
     Serial.begin(BUADRATE);
 
+    //Avoid confronation between touchscreen and tft display
     pinMode(TS_CS, OUTPUT);
     digitalWrite(TS_CS, HIGH); 
     pinMode(TFT_CS, OUTPUT);
     digitalWrite(TFT_CS, HIGH); 
 
+    //pinMode
     pinMode(buzzer, OUTPUT);
 
+    //tft display and touch screen initialization
     tft.begin(); 
     tft.setRotation(ROTATION); 
     tft.fillScreen(ILI9341_BLACK);
     ts.begin(); 
     ts.setRotation(ROTATION); 
+
+    //touchscreen's calibration
     calibrateTouchScreen();
+
+    //500 ms delay for safety (optional)
     delay(500);
+
+    //draw the piano
     drawPiano();
 }
 
 void loop()
 {
+    //If I did not touch the screen, the program would stuck in while loop.
     while(!ts.touched());
+
+    //If I touch the screen, it will storge coordinate in variable "sp"
+    //and play the corresponding frequency in function "playNote".
     ScreenPoint sp = getScreenCoords(ts.getPoint());
     playNote(sp);
 }
