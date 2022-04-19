@@ -127,7 +127,7 @@ void drawPiano(){
     bool t = 0 ;    //jump between "draw 2" and "draw 3" //toggle
 
     //String array storge note's name
-    String note[9] = {"C4","D4","E4","F4","G4","A4","B4","C5","C6"};
+    String note[9] = {"C","D","E","F","G","A","B","C"};
 
     //Basic setup for printing texts
     tft.setTextSize(2);
@@ -136,7 +136,7 @@ void drawPiano(){
     //Print Vertical black lines, by setting i = 0, and add up 40px every iterations.
     for(int i = 0 ; i <= tft.width() ; i += tft.width() / 8){
         tft.drawFastVLine(i,0,tft.height(),ILI9341_BLACK);
-        tft.setCursor(i + 10,210);
+        tft.setCursor(i + 15,210);
         //print note's text
         tft.print(note[i/40]);
     }
@@ -162,7 +162,7 @@ void drawPiano(){
 // return type: void
 // parameters: ScreenPoint
 // Description: the function is used to deicde the area i touched abd played the corresponding frequency
-void playNote(ScreenPoint p){
+void playNote(ScreenPoint p,int8_t shift){
     //Avoiding playing two notes at the same time when touching where black and white notes overlapped.
     //So if the black notes are touched, "isBlackPlayed" would set to true, otherwise it remain false.
     bool isBlackPlayed = 0 ; 
@@ -181,7 +181,7 @@ void playNote(ScreenPoint p){
                 continue;
         }
         if(p.x > i + 25 && p.x < i + 25 + BlackNoteWidth && p.y > 0 && p.y < BlackNoteHeight){
-            tone(buzzer,getPianoFreq('B',i / 40),100);
+            tone(buzzer,getPianoFreq('B',i / 40 , shift),100);
             isBlackPlayed = 1 ; 
         }
         count++ ;
@@ -191,7 +191,7 @@ void playNote(ScreenPoint p){
     if(!isBlackPlayed){
         for(int i = 0 ; i <= tft.width() ; i += tft.width() / 8){
             if(p.x > i && p.x < i + WhiteNoteWidth && p.y > 0 && p.y < WhiteNoteHeight){
-                tone(buzzer,getPianoFreq('W',i / 40),100);
+                tone(buzzer,getPianoFreq('W',i / 40 , shift),100);
             }
         }
     }
@@ -199,31 +199,43 @@ void playNote(ScreenPoint p){
 
 //Calculte piano frequencies
 //Wikipedia: https://zh.wikipedia.org/wiki/%E9%8B%BC%E7%90%B4%E9%8D%B5%E9%A0%BB%E7%8E%87
-float getPianoFreq(char n,int p){
+float getPianoFreq(char n,int p,int8_t shift){
     if(n == 'B'){
         switch(p){
-            case 0: p = 41 ;    break;
-            case 1: p = 43 ;    break;
-            case 3: p = 46 ;    break;
-            case 4: p = 48 ;    break;
-            case 5: p = 50 ;    break;
-            case 7: p = 53 ;    break;    
+            case 0: p = 41 + shift;    break;
+            case 1: p = 43 + shift;    break;
+            case 3: p = 46 + shift;    break;
+            case 4: p = 48 + shift;    break;
+            case 5: p = 50 + shift;    break;
+            case 7: p = 53 + shift;    break;    
         }
         return pow(pow(2,0.0833333),p-49) * 440.0 ;
     }else if(n == 'W'){
         switch(p){
-            case 0: p = 40 ;    break;
-            case 1: p = 42 ;    break;
-            case 2: p = 44 ;    break;
-            case 3: p = 45 ;    break;
-            case 4: p = 47 ;    break;
-            case 5: p = 49 ;    break;
-            case 6: p = 51 ;    break;
-            case 7: p = 52 ;    break;           
+            case 0: p = 40 + shift;    break;
+            case 1: p = 42 + shift;    break;
+            case 2: p = 44 + shift;    break;
+            case 3: p = 45 + shift;    break;
+            case 4: p = 47 + shift;    break;
+            case 5: p = 49 + shift;    break;
+            case 6: p = 51 + shift;    break;
+            case 7: p = 52 + shift;    break;           
         }
         return pow(pow(2,0.0833333),p-49) * 440.0 ;
     }
 }
+
+void printLevel(int shift){
+    tft.fillRect(2,2,22,22,ILI9341_WHITE);
+    tft.setCursor(4,4);
+    tft.setTextColor(ILI9341_BLACK);
+    tft.setTextSize(2);
+    tft.print(shift);
+}
+
+
+int8_t shift = 0 ;
+int level = 4 ;
 
 void setup()
 {
@@ -237,6 +249,10 @@ void setup()
 
     //pinMode
     pinMode(buzzer, OUTPUT);
+    pinMode(UP,INPUT_PULLUP);
+    pinMode(DOWN,INPUT_PULLUP);
+    pinMode(RIGHT,INPUT_PULLUP);
+    pinMode(LEFT,INPUT_PULLUP);
 
     //tft display and touch screen initialization
     tft.begin(); 
@@ -253,16 +269,28 @@ void setup()
 
     //draw the piano
     drawPiano();
+
+    printLevel(level);
 }
 
 void loop()
 {
     //If I did not touch the screen, the program would stuck in while loop.
-    while(!ts.touched());
-
+    while(!ts.touched()){
+        if(digitalRead(RIGHT) == 0){
+            shift += 12 ;
+            level += 1 ;
+            printLevel(level);
+        }else if(digitalRead(LEFT) == 0){
+            shift -= 12 ;
+            level -= 1 ;
+            printLevel(level);
+        };
+        delay(100);
+    };
     //If I touch the screen, it will storge coordinate in variable "sp"
     //and play the corresponding frequency in function "playNote".
     ScreenPoint sp = getScreenCoords(ts.getPoint());
-    playNote(sp);
+    playNote(sp,shift);
 }
 

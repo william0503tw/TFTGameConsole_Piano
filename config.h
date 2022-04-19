@@ -16,6 +16,10 @@
 #define select A1
 #define LED 5
 #define buzzer 6
+#define UP 3
+#define DOWN A0
+#define RIGHT 4
+#define LEFT 2
 
 //Screen's Coordinate
 /*(0,0)---------[+x]
